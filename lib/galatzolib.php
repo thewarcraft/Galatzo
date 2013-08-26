@@ -18,7 +18,7 @@ defined('GALATZO_INTERNAL') || die();
  */
 function required_param($parname, $type) {
     if (func_num_args() != 2 or empty($parname) or empty($type)) {
-        throw new coding_exception('required_param() requires $parname and $type to be specified (parameter: '.$parname.')');
+        throw new coding_exception('required_param() necessita $parname i $type ha de ser especificat (paràmetre: '.$parname.')');
     }
     if (isset($_POST[$parname])) {
         $param = $_POST[$parname];
@@ -46,7 +46,7 @@ function required_param($parname, $type) {
  */
 function optional_param($parname, $default, $type) {
     if (func_num_args() != 3 or empty($parname) or empty($type)) {
-        throw new coding_exception('optional_param() requires $parname, $default and $type to be specified (parameter: '.$parname.')');
+        throw new coding_exception('optional_param() necessita especificar $parname, $default i $type (paràmetre: '.$parname.')');
     }
     if (!isset($default)) {
         $default = null;
@@ -79,49 +79,37 @@ function clean_param($param, $type) {
     global $CFG;
 
     if (is_array($param)) {
-        throw new coding_exception('clean_param() can not process arrays, please use clean_param_array() instead.');
+        throw new coding_exception('clean_param() no pot processar arrays arrays.');
     } else if (is_object($param)) {
         if (method_exists($param, '__toString')) {
             $param = $param->__toString();
         } else {
-            throw new coding_exception('clean_param() can not process objects, please use clean_param_array() instead.');
+            throw new coding_exception('clean_param() no pot processar objectes.');
         }
     }
 
     switch ($type) {
-        case PARAM_RAW:          // no cleaning at all
+        case PARAM_RAW:          // No fa res net.
             $param = fix_utf8($param);
             return $param;
 
-        case PARAM_RAW_TRIMMED:         // no cleaning, but strip leading and trailing whitespace.
-            $param = fix_utf8($param);
-            return trim($param);
-
-        case PARAM_CLEAN:        // General HTML cleaning, try to use more specific type if possible
-            // this is deprecated!, please use more specific type instead
-            if (is_numeric($param)) {
-                return $param;
-            }
-            $param = fix_utf8($param);
-            return clean_text($param);     // Sweep for scripts, etc
-
         case PARAM_FLOAT:
         case PARAM_NUMBER:
-            return (float)$param;  // Convert to float
+            return (float)$param;  // Cast al tipus float.
 
-        case PARAM_ALPHA:        // Remove everything not a-z
+        case PARAM_ALPHA:        // Elimina tot el que no sigui a-z.
             return preg_replace('/[^a-zA-Z]/i', '', $param);
 
-        case PARAM_ALPHAEXT:     // Remove everything not a-zA-Z_- (originally allowed "/" too)
+        case PARAM_ALPHAEXT:     // Elimina tot el que no sigui a-zA-Z_-.
             return preg_replace('/[^a-zA-Z_-]/i', '', $param);
 
-        case PARAM_ALPHANUM:     // Remove everything not a-zA-Z0-9
+        case PARAM_ALPHANUM:     // Elimina tot el que no sigui a-zA-Z0-9.
             return preg_replace('/[^A-Za-z0-9]/i', '', $param);
 
-        case PARAM_ALPHANUMEXT:     // Remove everything not a-zA-Z0-9_-
+        case PARAM_ALPHANUMEXT:     // Elimina tot el que no sigui a-zA-Z0-9_-.
             return preg_replace('/[^A-Za-z0-9_-]/i', '', $param);
 
-        case PARAM_BOOL:         // Convert to 1 or 0
+        case PARAM_BOOL:         // Converteix a 0 o 1.
             $tempstr = strtolower($param);
             if ($tempstr === 'on' or $tempstr === 'yes' or $tempstr === 'true') {
                 $param = 1;
@@ -132,101 +120,17 @@ function clean_param($param, $type) {
             }
             return $param;
 
-        case PARAM_NOTAGS:       // Strip all tags
+        case PARAM_TEXT:
             $param = fix_utf8($param);
+            
             return strip_tags($param);
-
-        case PARAM_TEXT:    // leave only tags needed for multilang
-            $param = fix_utf8($param);
-            // if the multilang syntax is not correct we strip all tags
-            // because it would break xhtml strict which is required for accessibility standards
-            // please note this cleaning does not strip unbalanced '>' for BC compatibility reasons
-            do {
-                if (strpos($param, '</lang>') !== false) {
-                    // old and future mutilang syntax
-                    $param = strip_tags($param, '<lang>');
-                    if (!preg_match_all('/<.*>/suU', $param, $matches)) {
-                        break;
-                    }
-                    $open = false;
-                    foreach ($matches[0] as $match) {
-                        if ($match === '</lang>') {
-                            if ($open) {
-                                $open = false;
-                                continue;
-                            } else {
-                                break 2;
-                            }
-                        }
-                        if (!preg_match('/^<lang lang="[a-zA-Z0-9_-]+"\s*>$/u', $match)) {
-                            break 2;
-                        } else {
-                            $open = true;
-                        }
-                    }
-                    if ($open) {
-                        break;
-                    }
-                    return $param;
-
-                } else if (strpos($param, '</span>') !== false) {
-                    // current problematic multilang syntax
-                    $param = strip_tags($param, '<span>');
-                    if (!preg_match_all('/<.*>/suU', $param, $matches)) {
-                        break;
-                    }
-                    $open = false;
-                    foreach ($matches[0] as $match) {
-                        if ($match === '</span>') {
-                            if ($open) {
-                                $open = false;
-                                continue;
-                            } else {
-                                break 2;
-                            }
-                        }
-                        if (!preg_match('/^<span(\s+lang="[a-zA-Z0-9_-]+"|\s+class="multilang"){2}\s*>$/u', $match)) {
-                            break 2;
-                        } else {
-                            $open = true;
-                        }
-                    }
-                    if ($open) {
-                        break;
-                    }
-                    return $param;
-                }
-            } while (false);
-            // easy, just strip all tags, if we ever want to fix orphaned '&' we have to do that in format_string()
-            return strip_tags($param);
-
-        case PARAM_AUTH:
-            $param = clean_param($param, PARAM_PLUGIN);
-            if (empty($param)) {
-                return '';
-            } else if (exists_auth_plugin($param)) {
-                return $param;
-            } else {
-                return '';
-            }
-
-        case PARAM_LANG:
-            $param = clean_param($param, PARAM_SAFEDIR);
-            if (get_string_manager()->translation_exists($param)) {
-                return $param;
-            } else {
-                return ''; // Specified language is not installed or param malformed
-            }
 
         case PARAM_USERNAME:
             $param = fix_utf8($param);
             $param = str_replace(" " , "", $param);
-            $param = textlib::strtolower($param);  // Convert uppercase to lowercase MDL-16919
-            if (empty($CFG->extendedusernamechars)) {
-                // regular expression, eliminate all chars EXCEPT:
-                // alphanum, dash (-), underscore (_), at sign (@) and period (.) characters.
-                $param = preg_replace('/[^-\.@_a-z0-9]/', '', $param);
-            }
+            $param = strtolower($param);
+            $param = preg_replace('/[^-\.@_a-z0-9]/', '', $param);
+            
             return $param;
 
         case PARAM_EMAIL:
@@ -237,25 +141,16 @@ function clean_param($param, $type) {
                 return '';
             }
 
-        case PARAM_STRINGID:
-            if (preg_match('|^[a-zA-Z][a-zA-Z0-9\.:/_-]*$|', $param)) {
-                return $param;
-            } else {
-                return '';
-            }
-
-        default:                 // throw error, switched parameters in optional_param or another serious problem
+        default:
             print_error("unknownparamtype", '', '', $type);
     }
 }
 
 /**
- * Makes sure the data is using valid utf8, invalid characters are discarded.
- *
- * Note: this function is not intended for full objects with methods and private properties.
+ * Assegura que les dades estiguin en utf8, qualsevol altra caràcter extrany queda descartat.
  *
  * @param mixed $value
- * @return mixed with proper utf-8 encoding
+ * @return mixed Text en UTF8.
  */
 function fix_utf8($value) {
     if (is_null($value) or $value === '') {
@@ -263,17 +158,15 @@ function fix_utf8($value) {
 
     } else if (is_string($value)) {
         if ((string)(int)$value === $value) {
-            // shortcut
+            // Paraula curta.
             return $value;
         }
 
-        // Lower error reporting because glibc throws bogus notices.
         $olderror = error_reporting();
         if ($olderror & E_NOTICE) {
             error_reporting($olderror ^ E_NOTICE);
         }
 
-        // Note: this duplicates min_fix_utf8() intentionally.
         static $buggyiconv = null;
         if ($buggyiconv === null) {
             $buggyiconv = (!function_exists('iconv') or iconv('UTF-8', 'UTF-8//IGNORE', '100'.chr(130).'€') !== '100€');
@@ -287,7 +180,6 @@ function fix_utf8($value) {
                 mb_substitute_character($subst);
 
             } else {
-                // Warn admins on admin/index.php page.
                 $result = $value;
             }
 
@@ -308,23 +200,23 @@ function fix_utf8($value) {
         return $value;
 
     } else if (is_object($value)) {
-        $value = clone($value); // do not modify original
+        $value = clone($value); // No modificam res.
         foreach ($value as $k=>$v) {
             $value->$k = fix_utf8($v);
         }
         return $value;
 
     } else {
-        // this is some other type, no utf-8 here
+        // Si no és utf8.
         return $value;
     }
 }
 
 /**
- * Return true if given value is integer or string with integer value
+ * Retorna vertader si és un enter o un String que sigui un nombre.
  *
- * @param mixed $value String or Int
- * @return bool true if number, false if not
+ * @param mixed $value String o Int
+ * @return bool Verdader si és un número, fals en cas contrari.
  */
 function is_number($value) {
     if (is_int($value)) {
@@ -334,4 +226,57 @@ function is_number($value) {
     } else {
         return false;
     }
+}
+
+/**
+ * Requereix que l'usuari hagui accedit al sistema.
+ *
+ * @return mixed Redirecció a la plana de login en cas de no estar autenticat.
+ */
+function require_login() {
+    global $CFG, $SESSION, $USER, $DB;
+    
+    // Si l'usuari no està autenticat.
+    if (!isloggedin()) {
+        //NOTE: $USER->site check was obsoleted by session test cookie,
+        //      $USER->confirmed test is in login/index.php
+        if ($preventredirect) {
+            throw new require_login_exception('You are not logged in');
+        }
+
+        if ($setwantsurltome) {
+            $SESSION->wantsurl = qualified_me();
+        }
+        if (!empty($_SERVER['HTTP_REFERER'])) {
+            $SESSION->fromurl  = $_SERVER['HTTP_REFERER'];
+        }
+        redirect(get_login_url());
+        exit; // No hem de fer res més.
+    }
+    
+    // Cream la cookie d'accés.
+    sesskey();
+}
+
+/**
+ * Força la sortida d'un usuari.
+ */
+function require_logout() {
+    global $USER;
+
+    $params = $USER;
+
+    if (isloggedin()) {
+        add_to_log(SITEID, "user", "logout", "view.php?id=$USER->id&course=".SITEID, $USER->id, 0, $USER->id);
+
+        $authsequence = get_enabled_auth_plugins(); // auths, in sequence
+        foreach($authsequence as $authname) {
+            $authplugin = get_auth_plugin($authname);
+            $authplugin->prelogout_hook();
+        }
+    }
+
+    events_trigger('user_logout', $params);
+    session_get_instance()->terminate_current();
+    unset($params);
 }
